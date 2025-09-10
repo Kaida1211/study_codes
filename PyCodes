@@ -1,0 +1,29 @@
+import matplotlib.pyplot as plt
+from matplotlib_venn import venn3
+
+# サブセットの名前
+set_labels = ('A', 'B', 'C')
+
+# 領域のラベルを設定（2進数のパターンに基づいて）
+# 順番: A, B, C なので '100' は A のみ、'010' は B のみ、'001' は C のみ
+venn_labels = {
+    '100': 'Aのみ',
+    '010': 'Bのみ',
+    '001': 'Cのみ',
+    '110': 'A∩B',
+    '101': 'A∩C',
+    '011': 'B∩C',
+    '111': 'A∩B∩C'
+}
+
+# 描画
+plt.figure(figsize=(8, 6))
+v = venn3(subsets=(1, 1, 1, 1, 1, 1, 1), set_labels=set_labels)
+
+# ラベルのカスタマイズ
+for subset, label in venn_labels.items():
+    if v.get_label_by_id(subset):
+        v.get_label_by_id(subset).set_text(label)
+
+plt.title("(A∪B)∩C = (A∩C)∪(B∩C) のベン図")
+plt.show()
