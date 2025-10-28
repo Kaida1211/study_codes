@@ -1,0 +1,126 @@
+#include"iodefine.h"
+
+#include "iodefine.h"
+
+#define HALL_A  PORT1.PIDR.BIT.B0
+#define HALL_B  PORT1.PIDR.BIT.B1
+#define HALL_C  PORT1.PIDR.BIT.B2
+
+void init_clock(void);
+void init_port(void);
+void init_mtu_pwm(void);
+void init_hall_irq(void);
+void update_pwm_phase(uint8_t hall_state);
+
+//クロックの設定
+void init_clock(void)
+{
+    SYSTEM.PRCR.WORD = 0xA50B;       // 保護解除
+    SYSTEM.PLLCR.WORD = 0x0F00;      // PLL = x10 → 50MHz ×10 = 500MHz
+    SYSTEM.PLLCR2.BYTE = 0x00;       // PLL動作ON
+    SYSTEM.SCKCR.LONG = 0x21821211;  // PCLK等分周設定
+    SYSTEM.PRCR.WORD = 0xA500;       // 保護設定
+}
+
+//ポートの設定（ホール入力＋PWM出力）
+void init_port(void)
+{
+    SYSTEM.PRCR.WORD = 0xA50B;
+
+    // ホールセンサー入力設定
+    PORT1.PDR.BIT.B0 = 0; // HALL_A
+    PORT1.PDR.BIT.B1 = 0; // HALL_B
+    PORT1.PDR.BIT.B2 = 0; // HALL_C
+    PORT1.PCR.BYTE = 0x07; // プルアップ有効
+
+    // PWM出力ポート（U+, U−, V+, V−, W+, W−）
+    PORT2.PDR.BYTE = 0x3F;  // P20～P25 出力
+    PORT2.PMR.BYTE = 0x3F;  // 周辺機能使用
+
+    SYSTEM.PRCR.WORD = 0xA500;
+}
+
+//MTU0 設定
+void init_mtu_pwm(void)
+{
+    SYSTEM.PRCR.WORD = 0xA50B;
+    MSTP(MTU) = 0;    // MTU動作許可
+    SYSTEM.PRCR.WORD = 0xA500;
+
+    // PWM周期設定（例：20kHz）
+    MTU0.TGRA = 2500;  // (50MHz / 20kHz) / 1 = 2500
+    MTU0.TGRB = 1250;  // デューティ50%
+    MTU0.TMDR.BYTE = 0x03;  // PWMモード1
+    MTU0.TCR.BYTE = 0x20;   // TGRAでリセット
+    MTU.TSTR.BIT.CST0 = 1;  // カウント開始
+}
+
+//ホールセンサ割り込み設定（IRQ0使用）
+void init_hall_irq(void)
+{
+    // IRQ0, IRQ1, IRQ2を使用（上昇・下降両方検出）
+    ICU.IRQCR[0].BIT.IRQMD = 0x03;
+    ICU.IRQCR[1].BIT.IRQMD = 0x03;
+    ICU.IRQCR[2].BIT.IRQMD = 0x03;
+
+    IR(ICU, IRQ0) = 0;  IPR(ICU, IRQ0) = 5;  IEN(ICU, IRQ0) = 1;
+    IR(ICU, IRQ1) = 0;  IPR(ICU, IRQ1) = 5;  IEN(ICU, IRQ1) = 1;
+    IR(ICU, IRQ2) = 0;  IPR(ICU, IRQ2) = 5;  IEN(ICU, IRQ2) = 1;
+}
+
+#pragma interrupt (hall_irq0(vect=VECT(ICU, IRQ0)))
+#pragma interrupt (hall_irq1(vect=VECT(ICU, IRQ1)))
+#pragma interrupt (hall_irq2(vect=VECT(ICU, IRQ2)))
+
+void hall_irq0(void){ update_pwm_phase((HALL_A<<2)|(HALL_B<<1)|HALL_C); }
+void hall_irq1(void){ update_pwm_phase((HALL_A<<2)|(HALL_B<<1)|HALL_C); }
+void hall_irq2(void){ update_pwm_phase((HALL_A<<2)|(HALL_B<<1)|HALL_C); }
+
+void update_pwm_phase(uint8_t hall_state)
+{
+    switch(hall_state)
+    {
+        case 0b101: // Step 1
+            // U+: ON, V−: ON
+            // MTU出力設定
+            break;
+
+        case 0b100: // Step 2
+            // U+: ON, W−: ON
+            break;
+
+        case 0b110: // Step 3
+            // V+: ON, W−: ON
+            break;
+
+        case 0b010: // Step 4
+            // V+: ON, U−: ON
+            break;
+
+        case 0b011: // Step 5
+            // W+: ON, U−: ON
+            break;
+
+        case 0b001: // Step 6
+            // W+: ON, V−: ON
+            break;
+
+        default: // 無効
+            // 全OFF
+            break;
+    }
+}
+
+
+void main(void)
+{
+    init_clock();     // 外部クロック → PLL設定
+    init_port();      // ポート方向設定
+    init_mtu_pwm();   // MTUでPWM生成
+    init_hall_irq();  // ホール割り込み設定
+
+    while(1)
+    {
+        // メインループ（速度制御や方向判定など）
+    }
+}
