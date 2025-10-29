@@ -76,7 +76,7 @@ void init_MTU_PWM(void)
 
 
     // ==== 同期スタート設定　====
-    MTU.TSYR.BIT.SYNC0 = 0;
+    MTU.TSYR.BIT.SYNC0 = 1;
     MTU.TSYR.BIT.SYNC1 = 1;
     MTU.TSYR.BIT.SYNC2 = 1;
 
@@ -195,48 +195,45 @@ void set_pwm_pattern(uint8_t step)
     {
         case 0: // H3H2H1 = 001
             // U+: PWM, V-: ON
-            MTU0.TIORH.BIT.IOA = 2;  // U+
+            MTU0.TIORH.BIT.IOA = 6;  // U+
             MTU1.TIOR.BIT.IOB  = 1;  // V-
             break;
 
         case 1: // 101
             // U+: PWM, W-: ON
-            MTU0.TIORH.BIT.IOA = 2;  // U+
+            MTU0.TIORH.BIT.IOA = 6;  // U+
             MTU2.TIOR.BIT.IOB  = 1;  // W-
             break;
 
         case 2: // 100
             // V+: PWM, W-: ON
-            MTU1.TIOR.BIT.IOA  = 2;  // V+
+            MTU1.TIOR.BIT.IOA  = 6;  // V+
             MTU2.TIOR.BIT.IOB  = 1;  // W-
             break;
 
         case 3: // 110
             // V+: PWM, U-: ON
-            MTU1.TIOR.BIT.IOA  = 2;  // V+
+            MTU1.TIOR.BIT.IOA  = 6;  // V+
             MTU0.TIORH.BIT.IOB = 1;  // U-
             break;
 
         case 4: // 010
             // W+: PWM, U-: ON
-            MTU2.TIOR.BIT.IOA  = 2;  // W+
+            MTU2.TIOR.BIT.IOA  = 6;  // W+
             MTU0.TIORH.BIT.IOB = 1;  // U-
             break;
 
         case 5: // 011
             // W+: PWM, V-: ON
-            MTU2.TIOR.BIT.IOA  = 2;  // W+
+            MTU2.TIOR.BIT.IOA  = 6;  // W+
             MTU1.TIOR.BIT.IOB  = 1;  // V-
             break;
 
         default:
             // 非常停止
-            MTU0.TIORH.BIT.IOA = 0;
-            MTU0.TIORH.BIT.IOB = 0;
-            MTU1.TIOR.BIT.IOA  = 0;
-            MTU1.TIOR.BIT.IOB  = 0;
-            MTU2.TIOR.BIT.IOA  = 0;
-            MTU2.TIOR.BIT.IOB  = 0;
+            MTU0.TIORH.BYTE = 0;
+            MTU1.TIOR.BYTE  = 0;
+            MTU2.TIOR.BYTE  = 0;
             break;
     }
 }
