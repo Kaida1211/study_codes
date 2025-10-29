@@ -1,6 +1,9 @@
 #include"iodefine.h"
 #include<stdint.h>
 
+#define PWM_PERIOD 2499   // 20kHz (PCLK=50MHz)
+#define PWM_DUTY   1250   // 50%
+
 void init_CLK(void)
 {
 	int i;
@@ -59,20 +62,20 @@ void init_MTU_PWM(void)
 
     // ==== 周期・デューティ設定 ====
     // ---- MTU0 ----
-    MTU0.TGRA = 2499;               // 周期(20kHz)
-    MTU0.TGRB = 1250;               // Duty 50%
-    MTU0.TIORH.BIT.IOA = 2;     	// MTIOC0A: toggle High→Low U HO
-    MTU0.TIORH.BIT.IOB = 2;     	// MTIOC0B: toggle High→Low U LO
+    MTU0.TGRA = PWM_PERIOD;
+    MTU0.TGRB = PWM_DUTY;
+    //MTU0.TIORH.BIT.IOA = 2;     	// MTIOC0A: toggle High→Low U HO
+    //MTU0.TIORH.BIT.IOB = 2;     	// MTIOC0B: toggle High→Low U LO
     // ---- MTU1 ----
-    MTU1.TGRA = 2499;               // 周期(20kHz)
-    MTU1.TGRB = 1250;               // Duty 50%
-    MTU1.TIOR.BIT.IOA = 2;     		// MTIOC1A: toggle High→Low V HO
-    MTU1.TIOR.BIT.IOB = 2;     		// MTIOC1B: toggle High→Low U LO
+    MTU1.TGRA = PWM_PERIOD;
+    MTU1.TGRB = PWM_DUTY;
+    //MTU1.TIOR.BIT.IOA = 2;     		// MTIOC1A: toggle High→Low V HO
+    //MTU1.TIOR.BIT.IOB = 2;     		// MTIOC1B: toggle High→Low U LO
     // ---- MTU2 ----
-    MTU2.TGRA = 2499;               // 周期(20kHz)
-    MTU2.TGRB = 1250;               // Duty 50%
-    MTU2.TIOR.BIT.IOA = 2;     		// MTIOC2A: toggle High→Low W HO
-    MTU2.TIOR.BIT.IOB = 2;     		// MTIOC2B: toggle High→Low U LO
+    MTU2.TGRA = PWM_PERIOD;
+    MTU2.TGRB = PWM_DUTY;
+    //MTU2.TIOR.BIT.IOA = 2;     		// MTIOC2A: toggle High→Low W HO
+    //MTU2.TIOR.BIT.IOB = 2;     		// MTIOC2B: toggle High→Low U LO
 
 
     // ==== 同期スタート設定　====
@@ -81,8 +84,8 @@ void init_MTU_PWM(void)
     MTU.TSYR.BIT.SYNC2 = 1;
 
     // ==== 位相調整 ====
-    MTU1.TCNT = 833;            // 約120°遅れ		2499/3
-    MTU2.TCNT = 1666;           // 約240°遅れ		2499*2/3
+    MTU1.TCNT = PWM_PERIOD/3;            // 約120°遅れ		2499/3
+    MTU2.TCNT = 2*PWM_PERIOD/3;           // 約240°遅れ		2499*2/3
 
     // ==== ピン設定 ====
     PORTm.PMR.BIT.Bn = 1;           // Pmnを周辺機能ピンに
