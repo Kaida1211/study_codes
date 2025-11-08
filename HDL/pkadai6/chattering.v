@@ -38,7 +38,8 @@ module chattering #(parameter bitW = 17)(
         end else begin
             if(in != in_reg) begin
                 in_reg <= in;
-            end else if(count < bitW + 1) begin
+                count <= 0;
+            end else if(count < ((1 << (bitW + 1)) - 1)) begin
                 count <= count + 1;
             end else begin
                 out <= in_reg;
