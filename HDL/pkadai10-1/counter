@@ -1,0 +1,79 @@
+`timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date: 2025/11/09 16:19:57
+// Design Name: 
+// Module Name: counter
+// Project Name: 
+// Target Devices: 
+// Tool Versions: 
+// Description: 
+// 
+// Dependencies: 
+// 
+// Revision:
+// Revision 0.01 - File Created
+// Additional Comments:
+// 
+//////////////////////////////////////////////////////////////////////////////////
+
+module counterkhz #(parameter bitW = 10)(
+    input clock,
+    input reset,
+    output reg countkhz
+);
+    reg [bitW:0] count;
+        
+    always@(posedge clock or posedge reset) begin
+        if(reset) begin
+            count <= 0;
+        end else begin
+            if(count < (1 << (bitW + 1)) - 1) begin
+                count <= count + 1;
+            end else begin
+                countkhz <= ~countkhz;
+            end
+        end
+    end    
+endmodule
+
+
+module counter4(
+    input clock,
+    input reset,
+    output reg [1:0] d
+);
+
+    always@(posedge clock or posedge reset) begin
+        if(reset) begin
+            d <= 0;
+        end else begin
+            d <= d + 1;
+        end
+    end
+endmodule
+
+
+module counter(
+        input clock,
+        input reset,
+        output [1:0] d
+    );
+    
+    wire countkhz;
+    
+    counterkhz counterkhz(
+        .clock(clock),
+        .reset(reset),
+        .countkhz(countkhz)
+    );
+    
+    counter4 counter4(
+        .clock(countkhz),
+        .reset(reset),
+        .d(d)
+    );
+    
+endmodule
