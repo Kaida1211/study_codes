@@ -149,16 +149,74 @@ void initMTUsyncPWM(void) {
 //---------------------------------------------------------
 // 変数
 volatile int realSpeed = 0;			// 実際の速度を示す変数
-volatile int speedL = 0;
-volatile int speedR = 0;
 volatile int turnL = 0;
 volatile int turnR = 0;
+volatile int speedL = 0;
+volatile int speedR = 0;
 
 // 定数の指定
 #define PWM_OFF 0
 #define ic_ON  0
 #define ic_OFF 1
 
+
+typedef enum{
+	IN,
+	SD,
+	Motor_PCNT    // Motor_PIN_COUNTの略
+}Motor_PINS;
+
+typedef enum{
+	Phase_V,
+	Phase_U,
+	Phase_W,
+	Motor_PHSCNT   // Moter_PHASE_COUNTの略
+}Motor_PHASES;
+
+typedef struct {
+    volatile uint16_t *tgr;   // タイマレジスタ (IN用)
+    volatile uint8_t  *podr;  // 出力レジスタ (SD用)
+    uint8_t            bit;   // ビット位置
+} Motor_t;
+
+typedef struct {
+    volatile uint8_t  *pidr;  // 入力レジスタ (HL用)
+    uint8_t            bit;   // ビット位置
+} HL_t;
+
+// 初期化を楽にするためのマクロ
+#define Motor_IN(tgr_ptr)      {(volatile uint16_t*)tgr_ptr, 0, 0}
+#define Motor_SD(port, bit)    {0, (volatile uint8_t*)&PORT##port.PODR.BYTE, (uint8_t)(1<<bit)}
+#define Motor_HL(port, bit)    {(volatile uint8_t*)&PORT##port.PIDR.BYTE, (uint8_t)(1<<bit)}
+
+const Motor_t Motor_L[Motor_PHSCNT][Motor_PCNT] = {
+        {Motor_IN(&MTU0.TGRC), Motor_SD(5, 1)},
+		{Motor_IN(&MTU0.TGRD), Motor_SD(5, 0)},
+		{Motor_IN(&MTU0.TGRB), Motor_SD(5, 2)},
+};
+
+const Motor_t Motor_R[Motor_PHSCNT][Motor_PCNT] = {
+		{Motor_IN(&MTU1.TGRB), Motor_SD(5, 4)},
+		{Motor_IN(&MTU1.TGRA), Motor_SD(5, 3)},
+		{Motor_IN(&MTU2.TGRB), Motor_SD(5, 5)},
+};
+
+typedef enum {
+	Left,
+	Right,
+	Motor_SCNT
+}Motor_SIDE;
+
+const HL_t HL[Motor_SCNT][Motor_PHSCNT] = {
+	{Motor_HL(D, 0), Motor_HL(D, 1), Motor_HL(D, 2)},
+	{Motor_HL(D, 3), Motor_HL(D, 4), Motor_HL(D, 5)}
+};
+
+uint8_t read_HSIG(const HL_t*pin){
+	if(*(pin->pidr) & (pin->bit)) return 1;
+	else return 0;
+}
+/*
 // 配線の接続の指定
 // J6 左側のモーター
 #define VL_SD PORT5.PODR.BIT.B1
@@ -190,246 +248,136 @@ volatile int turnR = 0;
 #define HUR PORTD.PIDR.BIT.B4
 #define HWR PORTD.PIDR.BIT.B5
 
+*/
 
-// 右回転
-#define SENS_PATTERN_1R (!U &&  V && !W)
-#define PATTERN_1R	UR_IN = speedR; \
-					VR_IN = PWM_OFF; \
-					WR_IN = PWM_OFF; \
-					UR_SD = ic_ON; \
-					VR_SD = ic_ON; \
-					WR_SD = ic_OFF; \
+typedef enum {
+	PATTERN_OFF,
+	PATTERN_1,
+	PATTERN_2,
+	PATTERN_3,
+	PATTERN_4,
+	PATTERN_5,
+	PATTERN_6,
+	PATTERN_CNT
+}PATTERNS;
 
-#define SENS_PATTERN_2R (!U &&  V &&  W)
-#define PATTERN_2R	UR_IN = speedR; \
-					VR_IN = PWM_OFF; \
-					WR_IN = PWM_OFF; \
-					UR_SD = ic_ON; \
-					VR_SD = ic_OFF; \
-					WR_SD = ic_ON; \
+typedef enum {
+	OUT_OFF,
+	OUT_PWM,
+	OUT_ON
+}OutMode;
 
-#define SENS_PATTERN_3R (!U && !V &&  W)
-#define PATTERN_3R	UR_IN = PWM_OFF; \
-					VR_IN = speedR; \
-					WR_IN = PWM_OFF; \
-					UR_SD = ic_OFF; \
-					VR_SD = ic_ON; \
-					WR_SD = ic_ON; \
+const OutMode CommutationTable[PATTERN_CNT][Motor_PHSCNT] = {
+    {OUT_OFF, OUT_OFF, OUT_OFF},
+    {OUT_ON,  OUT_PWM, OUT_OFF}, // V=ON,  U=PWM, W=OFF
+    {OUT_OFF, OUT_PWM, OUT_ON }, // V=OFF, U=PWM, W=ON
+    {OUT_PWM, OUT_OFF, OUT_ON }, // V=PWM, U=OFF, W=ON
+    {OUT_PWM, OUT_ON,  OUT_OFF}, // V=PWM, U=ON,  W=OFF
+    {OUT_OFF, OUT_ON,  OUT_PWM}, // V=OFF, U=ON,  W=PWM
+    {OUT_ON,  OUT_OFF, OUT_PWM}  // V=ON,  U=OFF, W=PWM
+};
 
-#define SENS_PATTERN_4R ( U && !V &&  W)
-#define PATTERN_4R	UR_IN = PWM_OFF; \
-					VR_IN = speedR; \
-					WR_IN = PWM_OFF; \
-					UR_SD = ic_ON; \
-					VR_SD = ic_ON; \
-					WR_SD = ic_OFF; \
+int get_sensor_state(Motor_SIDE side){
+	int state = 0;
+	if(read_HSIG(&HL[side][Phase_V])) state |= 2;
+	if(read_HSIG(&HL[side][Phase_U])) state |= 4;
+	if(read_HSIG(&HL[side][Phase_W])) state |= 1;
+	return state;
+}
 
-#define SENS_PATTERN_5R ( U && !V && !W)
-#define PATTERN_5R	UR_IN = PWM_OFF; \
-					VR_IN = PWM_OFF; \
-					WR_IN = speedR; \
-					UR_SD = ic_ON; \
-					VR_SD = ic_OFF; \
-					WR_SD = ic_ON; \
-
-#define SENS_PATTERN_6R ( U &&  V && !W)
-#define PATTERN_6R	UR_IN = PWM_OFF; \
-					VR_IN = PWM_OFF; \
-					WR_IN = speedR; \
-					UR_SD = ic_OFF; \
-					VR_SD = ic_ON; \
-					WR_SD = ic_ON; \
-
-#define PATTERN_OFF	UR_IN = PWM_OFF; \
-					VR_IN = PWM_OFF; \
-					WR_IN = PWM_OFF; \
-					UR_SD = ic_OFF; \
-					VR_SD = ic_OFF; \
-					WR_SD = ic_OFF; \
+#define SENS_PATTERN_1 (!U &&  V && !W)
+#define SENS_PATTERN_2 (!U &&  V &&  W)
+#define SENS_PATTERN_3 (!U && !V &&  W)
+#define SENS_PATTERN_4 ( U && !V &&  W)
+#define SENS_PATTERN_5 ( U && !V && !W)
+#define SENS_PATTERN_6 ( U &&  V && !W)
 
 
-
-// 左回転
-#define SENS_PATTERN_1L (!U &&  V && !W)
-#define PATTERN_1L	UL_IN = speedL; \
-					VL_IN = PWM_OFF; \
-					WL_IN = PWM_OFF; \
-					UL_SD = ic_ON; \
-					VL_SD = ic_ON; \
-					WL_SD = ic_OFF; \
-
-#define SENS_PATTERN_2L (!U &&  V &&  W)
-#define PATTERN_2L	UL_IN = speedL; \
-					VL_IN = PWM_OFF; \
-					WL_IN = PWM_OFF; \
-					UL_SD = ic_ON; \
-					VL_SD = ic_OFF; \
-					WL_SD = ic_ON; \
-
-#define SENS_PATTERN_3L (!U && !V &&  W)
-#define PATTERN_3L	UL_IN = PWM_OFF; \
-					VL_IN = speedL; \
-					WL_IN = PWM_OFF; \
-					UL_SD = ic_OFF; \
-					VL_SD = ic_ON; \
-					WL_SD = ic_ON; \
-
-#define SENS_PATTERN_4L ( U && !V &&  W)
-#define PATTERN_4L	UL_IN = PWM_OFF; \
-					VL_IN = speedL; \
-					WL_IN = PWM_OFF; \
-					UL_SD = ic_ON; \
-					VL_SD = ic_ON; \
-					WL_SD = ic_OFF; \
-
-#define SENS_PATTERN_5L ( U && !V && !W)
-#define PATTERN_5L	UL_IN = PWM_OFF; \
-					VL_IN = PWM_OFF; \
-					WL_IN = speedL; \
-					UL_SD = ic_ON; \
-					VL_SD = ic_OFF; \
-					WL_SD = ic_ON; \
-
-#define SENS_PATTERN_6L ( U &&  V && !W)
-#define PATTERN_6L	UL_IN = PWM_OFF; \
-					VL_IN = PWM_OFF; \
-					WL_IN = speedL; \
-					UL_SD = ic_OFF; \
-					VL_SD = ic_ON; \
-					WL_SD = ic_ON; \
 // 電流が少ないバターン
 // ホールセンサの値を読み込んでモータが回転するために必要な印加電圧を作成する
 // 右側
-void BLDCR(int U, int V, int W, int turnR, int speedR)
-{
-	static int pattern = 0;//現在のパターン記憶用変数
-	static int oldpattern = 0;
-	static int intCount = 0;
-	intCount++;
-	// センサの状態からパターンを決定
-	if(SENS_PATTERN_1R) {
-		pattern = 1;
-	} else if(SENS_PATTERN_2R) {
-		pattern = 2;
-	} else if(SENS_PATTERN_3R) {
-		pattern = 3;
-	} else if(SENS_PATTERN_4R) {
-		pattern = 4;
-	} else if(SENS_PATTERN_5R) {
-		pattern = 5;
-	} else if(SENS_PATTERN_6R) {
-		pattern = 6;
-	} else {
-		pattern = 0; // エラー
-	}
+void apply_motor_control(const Motor_t cfg[Motor_PHSCNT][Motor_PCNT], PATTERNS pat, int speed) {
+	Motor_PHASES phase;
+	if (pat >= PATTERN_CNT) pat = PATTERN_OFF;
 
-	// 回転方向に応じてパターンを変更
-	if(turnR >= 0) {
-		pattern = (pattern % 6) + 1;
-		//pattern = pattern ;
-	} else {
-		//pattern = (pattern - 4 + 6) % 6 + 1;
-		pattern = (pattern - 3 + 6) % 6 + 1;
-	}
+    for (phase = Phase_V; phase <= Phase_W; phase++) {
+        OutMode mode = CommutationTable[pat][phase];
 
+        // 配列からIN(TGR)とSD(PODR)の情報を取得
+        const Motor_t *pin_in = &cfg[phase][IN];
+        const Motor_t *pin_sd = &cfg[phase][SD];
 
-	// パターンに応じた動作
-	switch(pattern) {
-		case 1:
-			PATTERN_1R;
-			break;
-		case 2:
-			PATTERN_2R;
-			break;
-		case 3:
-			PATTERN_3R;
-			break;
-		case 4:
-			PATTERN_4R;
-			break;
-		case 5:
-			PATTERN_5R;
-			break;
-		case 6:
-			PATTERN_6R;
-			break;
-		default:
-			PATTERN_OFF;
-			break;
-	}
-	// 回転数の計測
-	if(pattern != oldpattern) {
-		realSpeed = intCount;
-		intCount = 0;
-	}
-	oldpattern = pattern;
+        switch (mode) {
+            case OUT_PWM:
+                *(pin_in->tgr) = (uint16_t)speed;        // 0-254を代入
+                *(pin_sd->podr) &= (uint8_t)~(pin_sd->bit); // ic_ON (0)
+                break;
+
+            case OUT_ON:
+                *(pin_in->tgr) = PWM_OFF;                // 0
+                *(pin_sd->podr) &= (uint8_t)~(pin_sd->bit); // ic_ON (0)
+                break;
+
+            case OUT_OFF:
+            default:
+                *(pin_in->tgr) = PWM_OFF;                // 0
+                *(pin_sd->podr) |= (uint8_t)(pin_sd->bit);  // ic_OFF (1)
+                break;
+        }
+    }
 }
 
 
-// 左側
-void BLDCL(int U, int V, int W, int turnL, int speedL)
+void BLDC(Motor_t m_cfg[Motor_PHSCNT][Motor_PCNT], Motor_SIDE wheel_side, int turn, int speed)
 {
-	static int pattern = 0;//現在のパターン記憶用変数
-	static int oldpattern = 0;
-	static int intCount = 0;
-	intCount++;
+	static int oldpattern[Motor_SCNT] = {0, 0}; // 左右独立して保持
+	int pattern;
+	static int intCount[Motor_SCNT] = {0, 0};
+	int sensor_pos = 0;
+	int state_sens;
+	intCount[wheel_side]++;
+
+
 	// センサの状態からパターンを決定
-	if(SENS_PATTERN_1L) {
-		pattern = 1;
-	} else if(SENS_PATTERN_2L) {
-		pattern = 2;
-	} else if(SENS_PATTERN_3L) {
-		pattern = 3;
-	} else if(SENS_PATTERN_4L) {
-		pattern = 4;
-	} else if(SENS_PATTERN_5L) {
-		pattern = 5;
-	} else if(SENS_PATTERN_6L) {
-		pattern = 6;
-	} else {
-		pattern = 0; // エラー
+	// 1. センサの状態から物理位置を特定
+	pattern = PATTERN_OFF;
+	state_sens = get_sensor_state(wheel_side);
+
+	// 2. 状態から物理的な位置(sensor_pos)を特定
+	switch(state_sens) {
+		case 2: sensor_pos = PATTERN_1; break; // !U,  V, !W
+	    case 3: sensor_pos = PATTERN_2; break; // !U,  V,  W
+	    case 1: sensor_pos = PATTERN_3; break; // !U, !V,  W
+	    case 5: sensor_pos = PATTERN_4; break; //  U, !V,  W
+	    case 4: sensor_pos = PATTERN_5; break; //  U, !V, !W
+	    case 6: sensor_pos = PATTERN_6; break; //  U,  V, !W
+	    default:    sensor_pos = PATTERN_OFF; break;
+	}
+
+	if (sensor_pos == 0) {
+		     apply_motor_control(m_cfg, PATTERN_OFF, 0);
+		     return;
 	}
 
 	// 回転方向に応じてパターンを変更
-	if(turnL >= 0) {
-		pattern = (pattern % 6) + 1;
-	//pattern = pattern ;
+	if(turn >= 0) {
+		pattern = (sensor_pos % 6) + 1;
+		//pattern = pattern ;
 	} else {
-	//pattern = (pattern - 4 + 6) % 6 + 1;
-		pattern = (pattern - 3 + 6) % 6 + 1;
+		//pattern = (pattern - 4 + 6) % 6 + 1;
+		pattern = (sensor_pos - 3 + 6) % 6 + 1;
 	}
-
 
 	// パターンに応じた動作
-	switch(pattern) {
-		case 1:
-			PATTERN_1L;
-			break;
-		case 2:
-			PATTERN_2L;
-			break;
-		case 3:
-			PATTERN_3L;
-			break;
-		case 4:
-			PATTERN_4L;
-			break;
-		case 5:
-			PATTERN_5L;
-			break;
-		case 6:
-			PATTERN_6L;
-			break;
-		default:
-			PATTERN_OFF;
-			break;
-	}
+	apply_motor_control(m_cfg,(PATTERNS)pattern, speed);
+
+
 	// 回転数の計測
-	if(pattern != oldpattern) {
-		realSpeed = intCount;
-		intCount = 0;
+	if(pattern != oldpattern[wheel_side]) {
+		realSpeed[wheel_side] = intCount[wheel_side];
+		intCount[wheel_side] = 0;
 	}
-	oldpattern = pattern;
+	oldpattern[wheel_side] = pattern;
 }
 
 
@@ -703,8 +651,8 @@ void main(void)
 		}
 
 		// 極座標平面変換
-		radius = sqrt((float)pow(X,2) + (float)pow(Y,2));
-		theta = atan2(Y, X);
+		radius = sqrt((float)pow(XG,2) + (float)pow(YG,2));
+		theta = atan2(YG, XG);
 		printf("radius: %f  theta: %f \n", radius, theta);
 		printf("LC_dist_per[LC1]: %f", LC_dist_per[LC1]);
 		printf("LC_dist_per[LC2]: %f", LC_dist_per[LC2]);
