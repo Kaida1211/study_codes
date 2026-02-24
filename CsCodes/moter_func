@@ -1,0 +1,104 @@
+/*
+ * setting_moter.c
+ *
+ *  Created on: 2026/02/24
+ *      Author: e2417101
+ */
+
+#include "iodefine.h"
+#include "stdint.h"
+#include "stdbool.h"
+
+#define init_PIN(port, reg, bit) {				\
+	0, 											\
+	(volatile uint8_t*)&PORT##port.reg.BYTE,  \
+	(uint8_t)(1 << (bit))						\
+}
+
+#define init_TCN(tgr) {\
+	(volatile uint16_t*)tgr	\
+	0,						\
+	0						\
+}
+
+typedef struct{
+	volatile uint8_t* reg;
+	uint8_t bit;
+}PIN_t;
+
+typedef struct{
+	volatile uint16_t *tgr;
+}TCNT_t;
+
+typedef struct{
+	TCNT_t IN;
+	PIN_t SD;
+	PIN_t HL;
+}MOTER_PIN;
+
+typedef struct{
+	MOTER_PIN U;
+	MOTER_PIN V;
+	MOTER_PIN W;
+}MOTER_t;
+
+typedef enum{
+	L,
+	R
+}MOTER_SIDE;
+
+/*
+const MOTER_t MOTER[2] = {
+	{// L
+		.U = {
+			.IN = {init_TCN(&MTU0.TGRB)},
+			.SD = {init_PIN(5, PODR, 0},
+			.HL = {init_PIN(H, PIDR, 0}
+		},
+		.V = {
+			.IN = {init_TCN(&MTU0.TGRC)},
+			.SD = {init_PIN(5, PODR, 1},
+			.HL = {init_PIN(H, PIDR, 1}
+		},
+		.W = {
+			.IN = {init_TCN(&MTU0.TGRD)},
+			.SD = {init_PIN(5, PODR, 2},
+			.HL = {init_PIN(H, PIDR, 2}
+		}
+	},
+	{// R
+		.U = {
+			.IN = {init_TCN(&MTU1.TGRA)},
+			.SD = {init_PIN(5, PODR, 3},
+			.HL = {init_PIN(H, PIDR, 3}
+		},
+		.V = {
+			.IN = {init_TCN(&MTU1.TGRB)},
+			.SD = {init_PIN(5, PODR, 4},
+			.HL = {init_PIN(H, PIDR, 4}
+		},
+		.W = {
+			.IN = {init_TCN(&MTU2.TGRA)},
+			.SD = {init_PIN(5, PODR, 5},
+			.HL = {init_PIN(H, PIDR, 5}
+		}
+	},
+};
+*/
+
+void WRITE_PIN(const PIN_t* pin, bool val){
+	if(val == 1) *(pin->reg)|= pin->bit;
+	else *(pin->reg)&= ~(pin->bit);
+}
+
+bool READ_PIN(const PIN_t*pin){
+	return (*(pin->reg)&pin->bit) ? true : false ;
+}
+
+/*
+   void func(MOTER_SIDE side){
+   	   WRITE_PIN(MOTER[side].U.SD,1);
+   	   WRITE_PIN(MOTER[side].V.SD,1);
+   	   WRITE_PIN(MOTER[side].W.SD,1);
+   }
+ */
